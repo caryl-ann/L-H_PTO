@@ -114,6 +114,9 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .ig-caption{padding:4px 12px 12px;font-size:12px;line-height:1.5;color:var(--text);word-break:break-word}
 .ig-caption strong{font-weight:700}
 .ig-hashtags{color:#00376b;font-size:11.5px;padding:0 12px 10px;word-break:break-word}
+.hashtag-chip{font-size:11.5px;font-weight:600;color:#1255a0;background:#dbeeff;border:1px solid #b8d4f8;border-radius:100px;padding:3px 10px;cursor:pointer;font-family:Inter,sans-serif;transition:background .15s;}
+.hashtag-chip:hover{background:#c5dfff;}
+.hashtag-chip.added{background:#d6f5e5;color:#1a5c38;border-color:#a8e0bf;cursor:default;}
 .ig-date{font-size:10.5px;color:var(--text-soft);padding:0 12px 10px}
 .ig-status-bar{padding:6px 12px 10px;border-top:1px solid #f0ede8}
 
@@ -214,8 +217,15 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
           </div>
 
           <div>
-            <label for="post-hashtags">Hashtags</label>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <label for="post-hashtags" style="margin-bottom:0;">Hashtags</label>
+              <button type="button" onclick="suggestHashtags()" id="suggest-btn" style="font-size:11px;font-weight:600;color:#fff;background:#1a3a5c;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-family:Inter,sans-serif;display:flex;align-items:center;gap:4px;transition:background .15s;" title="AI-suggested hashtags based on your caption">✨ Suggest hashtags</button>
+            </div>
             <input type="text" id="post-hashtags" placeholder="#LincolnHubbard #LHPTO #SummitNJ" oninput="updatePreview()">
+            <div id="hashtag-suggestions" style="display:none;margin-top:8px;background:#f0f4fa;border-radius:6px;padding:10px 12px;">
+              <div style="font-size:10.5px;font-weight:600;color:#1a3a5c;margin-bottom:7px;">✨ Suggested — click to add:</div>
+              <div id="hashtag-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
           </div>
 
           <div>
@@ -619,7 +629,87 @@ function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Init
+// ── AI HASHTAG SUGGESTIONS ──
+async function suggestHashtags() {
+  const copy = document.getElementById('post-copy').value.trim();
+  const event = document.getElementById('post-event').value.trim();
+
+  if (!copy) {
+    showToast('⚠️ Write your caption first, then suggest hashtags', true);
+    return;
+  }
+
+  const btn = document.getElementById('suggest-btn');
+  btn.textContent = '⏳ Thinking…';
+  btn.disabled = true;
+
+  const prompt = `You are a social media expert for Lincoln-Hubbard Elementary School PTO in Summit, NJ.
+
+Based on this Instagram post caption, suggest 10–15 relevant hashtags. Include a mix of:
+- Specific to Lincoln-Hubbard or Summit NJ (e.g. #LincolnHubbard #SummitNJ #SummitNJMoms)
+- PTO/school community tags (e.g. #LHPTO #ElementarySchool #PTOlife #SchoolCommunity)
+- Event-specific tags based on the content
+- Broad reach tags (e.g. #NJMoms #SchoolSpirit #CommunityFirst)
+
+Event/topic: ${event || 'Lincoln-Hubbard PTO post'}
+Caption: ${copy}
+
+Return ONLY the hashtags as a space-separated list starting with #. No explanation, no numbering, just the hashtags on one line.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    const tags = text.match(/#\w+/g) || [];
+
+    if (tags.length === 0) {
+      showToast('⚠️ Couldn\'t generate suggestions — try again', true);
+      return;
+    }
+
+    // Get existing hashtags to mark already-added ones
+    const existing = document.getElementById('post-hashtags').value;
+
+    const chipsEl = document.getElementById('hashtag-chips');
+    chipsEl.innerHTML = tags.map(tag => {
+      const alreadyAdded = existing.toLowerCase().includes(tag.toLowerCase());
+      return `<button type="button" class="hashtag-chip${alreadyAdded ? ' added' : ''}"
+        onclick="addHashtag(this, '${tag}')"
+        ${alreadyAdded ? 'disabled' : ''}>${alreadyAdded ? '✓ ' : '+ '}${tag}</button>`;
+    }).join('');
+
+    document.getElementById('hashtag-suggestions').style.display = 'block';
+    showToast('✨ Hashtag suggestions ready!');
+
+  } catch(err) {
+    showToast('⚠️ Suggestion failed — check your connection', true);
+  } finally {
+    btn.textContent = '✨ Suggest hashtags';
+    btn.disabled = false;
+  }
+}
+
+function addHashtag(btn, tag) {
+  const field = document.getElementById('post-hashtags');
+  const current = field.value.trim();
+  // Don't add duplicates
+  if (current.toLowerCase().includes(tag.toLowerCase())) return;
+  field.value = current ? current + ' ' + tag : tag;
+  btn.classList.add('added');
+  btn.textContent = '✓ ' + tag;
+  btn.disabled = true;
+  updatePreview();
+}
+
 loadPosts();
 renderPosts();
 updatePreview();
