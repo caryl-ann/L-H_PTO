@@ -84,7 +84,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
   position:relative;overflow:hidden;
 }
 .image-upload-area:hover{border-color:var(--navy)}
-.image-upload-area input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+
 .image-upload-area .upload-label{font-size:12.5px;color:var(--text-soft);pointer-events:none}
 .image-upload-area .upload-label strong{color:var(--navy)}
 .image-preview-thumb{max-height:120px;max-width:100%;border-radius:6px;display:none;margin:0 auto}
@@ -327,7 +327,6 @@ let editingId = null;
 let currentImageData = null;
 let currentFilter = 'all';
 
-// Load from localStorage
 function loadPosts() {
   try {
     const saved = localStorage.getItem('lh-social-posts-2627');
@@ -338,44 +337,61 @@ function loadPosts() {
 function saveToDB() {
   try {
     localStorage.setItem('lh-social-posts-2627', JSON.stringify(posts));
-  } catch(e) {
-    alert('Storage limit reached. Consider exporting your posts before adding more.');
+  } catch(e) { showToast('Storage limit reached', true); }
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+function showToast(msg, warn) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;font-family:Inter,sans-serif;z-index:9999;transition:opacity .3s;box-shadow:0 2px 12px rgba(0,0,0,.15);pointer-events:none;';
+    document.body.appendChild(t);
   }
+  t.style.background = warn ? '#fff3cd' : '#1a3a5c';
+  t.style.color = warn ? '#856404' : '#fff';
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.opacity = '0'; }, 3500);
 }
 
 function syncToSheet(post) {
   try {
-    const payload = {
-      id: post.id, date: post.date, event: post.event,
-      copy: post.copy, hashtags: post.hashtags, link: post.link,
-      status: post.status, notes: post.notes, image: post.image ? true : false
-    };
     fetch(SHEET_URL, {
       method: 'POST', mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    .then(() => { showToast('✅ Saved to Google Sheet'); })
-    .catch(() => { showToast('⚠️ Saved locally — sheet sync failed', true); });
-  } catch(err) {
-    showToast('⚠️ Saved locally — sheet sync failed', true);
-  }
+      body: JSON.stringify({
+        id: post.id, date: post.date, event: post.event,
+        copy: post.copy, hashtags: post.hashtags, link: post.link,
+        status: post.status, notes: post.notes, image: !!post.image
+      })
+    }).then(() => showToast('Saved to Google Sheet'))
+      .catch(() => showToast('Saved locally - sheet sync failed', true));
+  } catch(e) { showToast('Saved locally - sheet sync failed', true); }
 }
 
-function showToast(message, isWarning) {
-  let toast = document.getElementById('toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;font-family:Inter,sans-serif;z-index:9999;transition:opacity .3s;box-shadow:0 2px 12px rgba(0,0,0,.15);';
-    document.body.appendChild(toast);
-  }
-  toast.style.background = isWarning ? '#fff3cd' : '#1a3a5c';
-  toast.style.color = isWarning ? '#856404' : '#fff';
-  toast.textContent = message;
-  toast.style.opacity = '1';
-  clearTimeout(toast._timeout);
-  toast._timeout = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+function triggerUpload() {
+  document.getElementById('post-image').click();
+}
+
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentImageData = ev.target.result;
+    document.getElementById('upload-thumb').src = currentImageData;
+    document.getElementById('upload-thumb').style.display = 'block';
+    document.getElementById('upload-label').style.display = 'none';
+    document.getElementById('clear-image-btn').style.display = 'inline-block';
+    updatePreview();
+  };
+  reader.readAsDataURL(file);
 }
 
 function clearImage() {
@@ -387,70 +403,31 @@ function clearImage() {
   updatePreview();
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-// ── IMAGE UPLOAD ──
-function handleImageUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    currentImageData = ev.target.result;
-    document.getElementById('upload-thumb').src = currentImageData;
-    document.getElementById('upload-thumb').style.display = 'block';
-    document.getElementById('upload-label').style.display = 'none';
-    document.getElementById('clear-image-btn').style.display = 'inline-block';
-    updatePreview();
-  };
-  reader.readAsDataURL(file);
-}
-
-// ── LIVE PREVIEW ──
 function updatePreview() {
   const copy = document.getElementById('post-copy').value;
   const hashtags = document.getElementById('post-hashtags').value;
   const dateVal = document.getElementById('post-date').value;
   const status = document.getElementById('post-status').value;
 
-  // Caption
-  const captionEl = document.getElementById('preview-caption');
-  if (copy) {
-    captionEl.innerHTML = '<strong>lincolnhubbardpto</strong> ' + escapeHtml(copy);
-  } else {
-    captionEl.innerHTML = '<span style="color:var(--text-soft);font-size:11.5px">Your caption will appear here…</span>';
-  }
+  const cap = document.getElementById('preview-caption');
+  cap.innerHTML = copy
+    ? '<strong>lincolnhubbardpto</strong> ' + esc(copy)
+    : '<span style="color:var(--text-soft);font-size:11.5px">Your caption will appear here...</span>';
 
-  // Hashtags
-  const hashEl = document.getElementById('preview-hashtags');
-  hashEl.textContent = hashtags || '';
+  document.getElementById('preview-hashtags').textContent = hashtags || '';
 
-  // Date
   const dateEl = document.getElementById('preview-date');
-  if (dateVal) {
-    const d = new Date(dateVal + 'T12:00:00');
-    dateEl.textContent = d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
-  } else {
-    dateEl.textContent = 'Date not set';
-  }
+  dateEl.textContent = dateVal
+    ? new Date(dateVal + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
+    : 'Date not set';
 
-  // Status
-  const statusBar = document.getElementById('preview-status-bar');
-  const statusMap = {
-    draft: '<span class="status-pill status-draft">📝 Draft</span>',
-    scheduled: '<span class="status-pill status-scheduled">📅 Scheduled</span>',
-    posted: '<span class="status-pill status-posted">✅ Posted</span>'
-  };
-  statusBar.innerHTML = statusMap[status] || statusMap.draft;
+  const sm = {draft:'<span class="status-pill status-draft">Draft</span>',scheduled:'<span class="status-pill status-scheduled">Scheduled</span>',posted:'<span class="status-pill status-posted">Posted</span>'};
+  document.getElementById('preview-status-bar').innerHTML = sm[status] || sm.draft;
 
-  // Image
-  const imgArea = document.getElementById('preview-image-area');
-  if (currentImageData) {
-    imgArea.innerHTML = '<img src="' + currentImageData + '" alt="Post image">';
-  } else {
-    imgArea.innerHTML = '<div class="ig-image-placeholder">Image will appear here</div>';
-  }
+  const ia = document.getElementById('preview-image-area');
+  ia.innerHTML = currentImageData
+    ? '<img src="' + currentImageData + '" style="width:100%;height:100%;object-fit:cover;">'
+    : '<div class="ig-image-placeholder">Image will appear here</div>';
 }
 
 function updateCharCount() {
@@ -460,27 +437,26 @@ function updateCharCount() {
   el.className = 'char-count' + (len > 2000 ? (len >= 2200 ? ' over' : ' warn') : '');
 }
 
-// ── SAVE POST ──
 function savePost() {
   const copy = document.getElementById('post-copy').value.trim();
-  if (!copy) { alert('Please write some post copy before saving.'); return; }
+  if (!copy) { showToast('Please write some post copy first', true); return; }
 
   const post = {
     id: editingId || generateId(),
     date: document.getElementById('post-date').value,
     event: document.getElementById('post-event').value.trim(),
-    copy: copy,
+    copy,
     hashtags: document.getElementById('post-hashtags').value.trim(),
     link: document.getElementById('post-link').value.trim(),
     notes: document.getElementById('post-notes').value.trim(),
     image: currentImageData,
     status: document.getElementById('post-status').value,
-    createdAt: editingId ? (posts.find(p=>p.id===editingId)||{}).createdAt || Date.now() : Date.now()
+    createdAt: Date.now()
   };
 
   if (editingId) {
     const idx = posts.findIndex(p => p.id === editingId);
-    if (idx !== -1) posts[idx] = post;
+    if (idx !== -1) { post.createdAt = posts[idx].createdAt; posts[idx] = post; }
     editingId = null;
   } else {
     posts.push(post);
@@ -491,20 +467,20 @@ function savePost() {
   syncToSheet(post);
   resetForm();
   renderPosts();
+  showToast('Post added to planner!');
 }
 
 function resetForm() {
-  document.getElementById('post-date').value = '';
+  ['post-event','post-copy','post-hashtags','post-link','post-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('post-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('post-status').value = 'draft';
-  document.getElementById('post-event').value = '';
-  document.getElementById('post-copy').value = '';
-  document.getElementById('post-hashtags').value = '';
-  document.getElementById('post-link').value = '';
-  document.getElementById('post-notes').value = '';
   document.getElementById('post-image').value = '';
   document.getElementById('upload-thumb').style.display = 'none';
   document.getElementById('upload-label').style.display = 'block';
   document.getElementById('clear-image-btn').style.display = 'none';
+  document.getElementById('hashtag-suggestions').style.display = 'none';
   document.getElementById('char-count').textContent = '0 / 2200';
   currentImageData = null;
   editingId = null;
@@ -513,12 +489,8 @@ function resetForm() {
   updatePreview();
 }
 
-function cancelEdit() {
-  editingId = null;
-  resetForm();
-}
+function cancelEdit() { editingId = null; resetForm(); }
 
-// ── EDIT / DELETE ──
 function editPost(id) {
   const p = posts.find(p => p.id === id);
   if (!p) return;
@@ -535,6 +507,7 @@ function editPost(id) {
     document.getElementById('upload-thumb').src = currentImageData;
     document.getElementById('upload-thumb').style.display = 'block';
     document.getElementById('upload-label').style.display = 'none';
+    document.getElementById('clear-image-btn').style.display = 'inline-block';
   }
   document.getElementById('save-btn').textContent = 'Save Changes';
   document.getElementById('cancel-btn').style.display = 'block';
@@ -553,7 +526,7 @@ function deletePost(id) {
 function cycleStatus(id) {
   const p = posts.find(p => p.id === id);
   if (!p) return;
-  const cycle = {draft:'scheduled', scheduled:'posted', posted:'draft'};
+  const cycle = {draft:'scheduled',scheduled:'posted',posted:'draft'};
   p.status = cycle[p.status] || 'draft';
   saveToDB();
   syncToSheet(p);
@@ -567,7 +540,6 @@ function clearAll() {
   renderPosts();
 }
 
-// ── FILTER ──
 function filterPosts(type, btn) {
   currentFilter = type;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -575,123 +547,81 @@ function filterPosts(type, btn) {
   renderPosts();
 }
 
-// ── RENDER ──
 function renderPosts() {
   const grid = document.getElementById('posts-grid');
   const filtered = currentFilter === 'all' ? posts : posts.filter(p => p.status === currentFilter);
-  
   document.getElementById('posts-count').textContent = posts.length + ' post' + (posts.length !== 1 ? 's' : '');
 
-  if (filtered.length === 0) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📱</div><p>' +
-      (currentFilter === 'all' ? 'No posts yet — plan your first one above!' : 'No ' + currentFilter + ' posts yet.') +
-      '</p></div>';
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128241;</div><p>' +
+      (currentFilter === 'all' ? 'No posts yet - plan your first one above!' : 'No ' + currentFilter + ' posts yet.') + '</p></div>';
     return;
   }
 
-  const statusMap = {
-    draft: '<span class="status-pill status-draft">📝 Draft</span>',
-    scheduled: '<span class="status-pill status-scheduled">📅 Scheduled</span>',
-    posted: '<span class="status-pill status-posted">✅ Posted</span>'
+  const sm = {
+    draft:'<span class="status-pill status-draft">&#128221; Draft</span>',
+    scheduled:'<span class="status-pill status-scheduled">&#128197; Scheduled</span>',
+    posted:'<span class="status-pill status-posted">&#9989; Posted</span>'
   };
 
   grid.innerHTML = filtered.map(p => {
-    const dateStr = p.date ? new Date(p.date + 'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : 'No date';
-    const imageHtml = p.image
-      ? '<img src="' + p.image + '" alt="post image">'
-      : '<div class="post-card-image-placeholder">No image</div>';
-    const linkHtml = p.link ? '<div style="font-size:10.5px;color:#00376b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ' + escapeHtml(p.link) + '</div>' : '';
-    const notesHtml = p.notes ? '<div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;font-style:italic;">💬 ' + escapeHtml(p.notes) + '</div>' : '';
-    const eventHtml = p.event ? '<div style="font-size:10.5px;font-weight:600;color:var(--navy);margin-bottom:3px;">' + escapeHtml(p.event) + '</div>' : '';
+    const ds = p.date ? new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : 'No date';
+    const img = p.image ? '<img src="'+p.image+'" style="width:100%;height:100%;object-fit:cover;">' : '<div class="post-card-image-placeholder">No image</div>';
     return '<div class="post-card">' +
-      '<div class="post-card-image">' + imageHtml + '</div>' +
+      '<div class="post-card-image">'+img+'</div>' +
       '<div class="post-card-body">' +
-        '<div class="post-card-date">' + dateStr + '</div>' +
-        eventHtml +
-        '<div class="post-card-copy">' + escapeHtml(p.copy) + '</div>' +
-        (p.hashtags ? '<div class="post-card-tags">' + escapeHtml(p.hashtags) + '</div>' : '') +
-        linkHtml + notesHtml +
-        '<div class="post-card-footer">' +
-          (statusMap[p.status] || statusMap.draft) +
+        '<div class="post-card-date">'+ds+'</div>' +
+        (p.event ? '<div style="font-size:10.5px;font-weight:600;color:var(--navy);margin-bottom:3px;">'+esc(p.event)+'</div>' : '') +
+        '<div class="post-card-copy">'+esc(p.copy)+'</div>' +
+        (p.hashtags ? '<div class="post-card-tags">'+esc(p.hashtags)+'</div>' : '') +
+        (p.link ? '<div style="font-size:10.5px;color:#00376b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&#128279; '+esc(p.link)+'</div>' : '') +
+        (p.notes ? '<div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;font-style:italic;">&#128172; '+esc(p.notes)+'</div>' : '') +
+        '<div class="post-card-footer">' + (sm[p.status]||sm.draft) +
           '<div class="post-card-actions">' +
-            '<button class="btn-sm btn-status" onclick="cycleStatus('' + p.id + '')">Change status</button>' +
-            '<button class="btn-sm btn-edit" onclick="editPost('' + p.id + '')">Edit</button>' +
-            '<button class="btn-sm btn-delete" onclick="deletePost('' + p.id + '')">Delete</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
+            '<button class="btn-sm btn-status" onclick="cycleStatus(''+p.id+'')">Change status</button>' +
+            '<button class="btn-sm btn-edit" onclick="editPost(''+p.id+'')">Edit</button>' +
+            '<button class="btn-sm btn-delete" onclick="deletePost(''+p.id+'')">Delete</button>' +
+          '</div></div>' +
+      '</div></div>';
   }).join('');
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── AI HASHTAG SUGGESTIONS ──
 async function suggestHashtags() {
   const copy = document.getElementById('post-copy').value.trim();
   const event = document.getElementById('post-event').value.trim();
-
-  if (!copy) {
-    showToast('⚠️ Write your caption first, then suggest hashtags', true);
-    return;
-  }
+  if (!copy) { showToast('Write your caption first', true); return; }
 
   const btn = document.getElementById('suggest-btn');
-  btn.textContent = '⏳ Thinking…';
+  btn.textContent = 'Thinking...';
   btn.disabled = true;
 
-  const prompt = `You are a social media expert for Lincoln-Hubbard Elementary School PTO in Summit, NJ.
-
-Based on this Instagram post caption, suggest 10–15 relevant hashtags. Include a mix of:
-- Specific to Lincoln-Hubbard or Summit NJ (e.g. #LincolnHubbard #SummitNJ #SummitNJMoms)
-- PTO/school community tags (e.g. #LHPTO #ElementarySchool #PTOlife #SchoolCommunity)
-- Event-specific tags based on the content
-- Broad reach tags (e.g. #NJMoms #SchoolSpirit #CommunityFirst)
-
-Event/topic: ${event || 'Lincoln-Hubbard PTO post'}
-Caption: ${copy}
-
-Return ONLY the hashtags as a space-separated list starting with #. No explanation, no numbering, just the hashtags on one line.`;
+  const prompt = `You are a social media expert for Lincoln-Hubbard Elementary School PTO in Summit, NJ. Suggest 10-15 Instagram hashtags for this post. Mix of: school-specific (#LincolnHubbard #SummitNJ #LHPTO), community (#SummitNJMoms #NJMoms #ElementarySchool #PTOlife), event-specific, and broad reach tags. Event: ${event || 'LH PTO post'}. Caption: ${copy}. Return ONLY hashtags space-separated, nothing else.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
     });
-
-    const data = await response.json();
+    const data = await res.json();
     const text = data.content?.[0]?.text?.trim() || '';
-    const tags = text.match(/#\w+/g) || [];
+    const tags = [...new Set(text.match(/#[A-Za-z0-9]+/g) || [])];
+    if (!tags.length) { showToast('Could not generate suggestions - try again', true); return; }
 
-    if (tags.length === 0) {
-      showToast('⚠️ Couldn\'t generate suggestions — try again', true);
-      return;
-    }
-
-    // Get existing hashtags to mark already-added ones
-    const existing = document.getElementById('post-hashtags').value;
-
-    const chipsEl = document.getElementById('hashtag-chips');
-    chipsEl.innerHTML = tags.map(tag => {
-      const alreadyAdded = existing.toLowerCase().includes(tag.toLowerCase());
-      return `<button type="button" class="hashtag-chip${alreadyAdded ? ' added' : ''}"
-        onclick="addHashtag(this, '${tag}')"
-        ${alreadyAdded ? 'disabled' : ''}>${alreadyAdded ? '✓ ' : '+ '}${tag}</button>`;
+    const existing = document.getElementById('post-hashtags').value.toLowerCase();
+    document.getElementById('hashtag-chips').innerHTML = tags.map(tag => {
+      const added = existing.includes(tag.toLowerCase());
+      return '<button type="button" class="hashtag-chip' + (added ? ' added' : '') + '" onclick="addHashtag(this,'' + tag + '')" ' + (added ? 'disabled' : '') + '>' + (added ? '&#10003; ' : '+ ') + tag + '</button>';
     }).join('');
-
     document.getElementById('hashtag-suggestions').style.display = 'block';
-    showToast('✨ Hashtag suggestions ready!');
-
-  } catch(err) {
-    showToast('⚠️ Suggestion failed — check your connection', true);
+    showToast('Hashtag suggestions ready!');
+  } catch(e) {
+    showToast('Suggestion failed - check connection', true);
   } finally {
     btn.textContent = '✨ Suggest hashtags';
     btn.disabled = false;
@@ -700,24 +630,20 @@ Return ONLY the hashtags as a space-separated list starting with #. No explanati
 
 function addHashtag(btn, tag) {
   const field = document.getElementById('post-hashtags');
-  const current = field.value.trim();
-  // Don't add duplicates
-  if (current.toLowerCase().includes(tag.toLowerCase())) return;
-  field.value = current ? current + ' ' + tag : tag;
+  const cur = field.value.trim();
+  if (cur.toLowerCase().includes(tag.toLowerCase())) return;
+  field.value = cur ? cur + ' ' + tag : tag;
   btn.classList.add('added');
   btn.textContent = '✓ ' + tag;
   btn.disabled = true;
   updatePreview();
 }
 
+// INIT
 loadPosts();
 renderPosts();
 updatePreview();
-
-// Set today's date as default
 document.getElementById('post-date').value = new Date().toISOString().split('T')[0];
-
-// Live preview on status/date change
 document.getElementById('post-status').addEventListener('change', updatePreview);
 document.getElementById('post-date').addEventListener('change', updatePreview);
 document.getElementById('post-event').addEventListener('input', updatePreview);
