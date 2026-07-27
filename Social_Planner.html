@@ -321,15 +321,15 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 </main>
 
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwpkF-BCj0cBxrju0ycBOGbhES-tYE7hj1VzBwPjDyfr4_NRAcSxXv2sXz5bTqhnTKGvA/exec';
-let posts = [];
-let editingId = null;
-let currentImageData = null;
-let currentFilter = 'all';
+var SHEET_URL = 'https://script.google.com/macros/s/AKfycbwpkF-BCj0cBxrju0ycBOGbhES-tYE7hj1VzBwPjDyfr4_NRAcSxXv2sXz5bTqhnTKGvA/exec';
+var posts = [];
+var editingId = null;
+var currentImageData = null;
+var currentFilter = 'all';
 
 function loadPosts() {
   try {
-    const saved = localStorage.getItem('lh-social-posts-2627');
+    var saved = localStorage.getItem('lh-social-posts-2627');
     if (saved) posts = JSON.parse(saved);
   } catch(e) { posts = []; }
 }
@@ -345,7 +345,7 @@ function generateId() {
 }
 
 function showToast(msg, warn) {
-  let t = document.getElementById('toast');
+  var t = document.getElementById('toast');
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast';
@@ -356,37 +356,44 @@ function showToast(msg, warn) {
   t.style.color = warn ? '#856404' : '#fff';
   t.textContent = msg;
   t.style.opacity = '1';
-  clearTimeout(t._t);
-  t._t = setTimeout(() => { t.style.opacity = '0'; }, 3500);
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.style.opacity = '0'; }, 3500);
 }
 
 function syncToSheet(post) {
   try {
     fetch(SHEET_URL, {
-      method: 'POST', mode: 'no-cors',
+      method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: post.id, date: post.date, event: post.event,
-        copy: post.copy, hashtags: post.hashtags, link: post.link,
-        status: post.status, notes: post.notes, image: !!post.image
+        id: post.id,
+        date: post.date,
+        event: post.event,
+        copy: post.copy,
+        hashtags: post.hashtags,
+        link: post.link,
+        status: post.status,
+        notes: post.notes,
+        image: post.image ? true : false
       })
-    }).then(() => showToast('Saved to Google Sheet'))
-      .catch(() => showToast('Saved locally - sheet sync failed', true));
-  } catch(e) { showToast('Saved locally - sheet sync failed', true); }
-}
-
-function triggerUpload() {
-  document.getElementById('post-image').click();
+    })
+    .then(function() { showToast('Saved to Google Sheet'); })
+    .catch(function() { showToast('Saved locally (sheet sync failed)', true); });
+  } catch(e) {
+    showToast('Saved locally (sheet sync failed)', true);
+  }
 }
 
 function handleImageUpload(e) {
-  const file = e.target.files[0];
+  var file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
     currentImageData = ev.target.result;
-    document.getElementById('upload-thumb').src = currentImageData;
-    document.getElementById('upload-thumb').style.display = 'block';
+    var thumb = document.getElementById('upload-thumb');
+    thumb.src = currentImageData;
+    thumb.style.display = 'block';
     document.getElementById('upload-label').style.display = 'none';
     document.getElementById('clear-image-btn').style.display = 'inline-block';
     updatePreview();
@@ -404,48 +411,64 @@ function clearImage() {
 }
 
 function updatePreview() {
-  const copy = document.getElementById('post-copy').value;
-  const hashtags = document.getElementById('post-hashtags').value;
-  const dateVal = document.getElementById('post-date').value;
-  const status = document.getElementById('post-status').value;
+  var copy = document.getElementById('post-copy').value;
+  var hashtags = document.getElementById('post-hashtags').value;
+  var dateVal = document.getElementById('post-date').value;
+  var status = document.getElementById('post-status').value;
 
-  const cap = document.getElementById('preview-caption');
-  cap.innerHTML = copy
-    ? '<strong>lincolnhubbardpto</strong> ' + esc(copy)
-    : '<span style="color:var(--text-soft);font-size:11.5px">Your caption will appear here...</span>';
+  var cap = document.getElementById('preview-caption');
+  if (copy) {
+    cap.innerHTML = '<strong>lincolnhubbardpto</strong> ' + esc(copy);
+  } else {
+    cap.innerHTML = '<span style="color:var(--text-soft);font-size:11.5px">Your caption will appear here...</span>';
+  }
 
   document.getElementById('preview-hashtags').textContent = hashtags || '';
 
-  const dateEl = document.getElementById('preview-date');
-  dateEl.textContent = dateVal
-    ? new Date(dateVal + 'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
-    : 'Date not set';
+  var dateEl = document.getElementById('preview-date');
+  if (dateVal) {
+    var d = new Date(dateVal + 'T12:00:00');
+    dateEl.textContent = d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  } else {
+    dateEl.textContent = 'Date not set';
+  }
 
-  const sm = {draft:'<span class="status-pill status-draft">Draft</span>',scheduled:'<span class="status-pill status-scheduled">Scheduled</span>',posted:'<span class="status-pill status-posted">Posted</span>'};
-  document.getElementById('preview-status-bar').innerHTML = sm[status] || sm.draft;
+  var statusMap = {
+    draft: '<span class="status-pill status-draft">Draft</span>',
+    scheduled: '<span class="status-pill status-scheduled">Scheduled</span>',
+    posted: '<span class="status-pill status-posted">Posted</span>'
+  };
+  document.getElementById('preview-status-bar').innerHTML = statusMap[status] || statusMap['draft'];
 
-  const ia = document.getElementById('preview-image-area');
-  ia.innerHTML = currentImageData
-    ? '<img src="' + currentImageData + '" style="width:100%;height:100%;object-fit:cover;">'
-    : '<div class="ig-image-placeholder">Image will appear here</div>';
+  var imgArea = document.getElementById('preview-image-area');
+  if (currentImageData) {
+    imgArea.innerHTML = '<img src="' + currentImageData + '" style="width:100%;height:100%;object-fit:cover;">';
+  } else {
+    imgArea.innerHTML = '<div class="ig-image-placeholder">Image will appear here</div>';
+  }
 }
 
 function updateCharCount() {
-  const len = document.getElementById('post-copy').value.length;
-  const el = document.getElementById('char-count');
+  var len = document.getElementById('post-copy').value.length;
+  var el = document.getElementById('char-count');
   el.textContent = len + ' / 2200';
-  el.className = 'char-count' + (len > 2000 ? (len >= 2200 ? ' over' : ' warn') : '');
+  if (len >= 2200) { el.className = 'char-count over'; }
+  else if (len > 2000) { el.className = 'char-count warn'; }
+  else { el.className = 'char-count'; }
 }
 
 function savePost() {
-  const copy = document.getElementById('post-copy').value.trim();
-  if (!copy) { showToast('Please write some post copy first', true); return; }
+  var copy = document.getElementById('post-copy').value.trim();
+  if (!copy) {
+    showToast('Please write some post copy first', true);
+    return;
+  }
 
-  const post = {
+  var post = {
     id: editingId || generateId(),
     date: document.getElementById('post-date').value,
     event: document.getElementById('post-event').value.trim(),
-    copy,
+    copy: copy,
     hashtags: document.getElementById('post-hashtags').value.trim(),
     link: document.getElementById('post-link').value.trim(),
     notes: document.getElementById('post-notes').value.trim(),
@@ -455,14 +478,25 @@ function savePost() {
   };
 
   if (editingId) {
-    const idx = posts.findIndex(p => p.id === editingId);
-    if (idx !== -1) { post.createdAt = posts[idx].createdAt; posts[idx] = post; }
+    var idx = -1;
+    for (var i = 0; i < posts.length; i++) {
+      if (posts[i].id === editingId) { idx = i; break; }
+    }
+    if (idx !== -1) {
+      post.createdAt = posts[idx].createdAt;
+      posts[idx] = post;
+    }
     editingId = null;
   } else {
     posts.push(post);
   }
 
-  posts.sort((a,b) => (a.date||'9999') > (b.date||'9999') ? 1 : -1);
+  posts.sort(function(a, b) {
+    var da = a.date || '9999';
+    var db = b.date || '9999';
+    return da > db ? 1 : da < db ? -1 : 0;
+  });
+
   saveToDB();
   syncToSheet(post);
   resetForm();
@@ -471,9 +505,10 @@ function savePost() {
 }
 
 function resetForm() {
-  ['post-event','post-copy','post-hashtags','post-link','post-notes'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  var ids = ['post-event','post-copy','post-hashtags','post-link','post-notes'];
+  for (var i = 0; i < ids.length; i++) {
+    document.getElementById(ids[i]).value = '';
+  }
   document.getElementById('post-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('post-status').value = 'draft';
   document.getElementById('post-image').value = '';
@@ -489,11 +524,18 @@ function resetForm() {
   updatePreview();
 }
 
-function cancelEdit() { editingId = null; resetForm(); }
+function cancelEdit() {
+  editingId = null;
+  resetForm();
+}
 
 function editPost(id) {
-  const p = posts.find(p => p.id === id);
+  var p = null;
+  for (var i = 0; i < posts.length; i++) {
+    if (posts[i].id === id) { p = posts[i]; break; }
+  }
   if (!p) return;
+
   editingId = id;
   document.getElementById('post-date').value = p.date || '';
   document.getElementById('post-status').value = p.status || 'draft';
@@ -513,21 +555,28 @@ function editPost(id) {
   document.getElementById('cancel-btn').style.display = 'block';
   updatePreview();
   updateCharCount();
-  window.scrollTo({top:0, behavior:'smooth'});
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function deletePost(id) {
   if (!confirm('Delete this post?')) return;
-  posts = posts.filter(p => p.id !== id);
+  var newPosts = [];
+  for (var i = 0; i < posts.length; i++) {
+    if (posts[i].id !== id) newPosts.push(posts[i]);
+  }
+  posts = newPosts;
   saveToDB();
   renderPosts();
 }
 
 function cycleStatus(id) {
-  const p = posts.find(p => p.id === id);
+  var p = null;
+  for (var i = 0; i < posts.length; i++) {
+    if (posts[i].id === id) { p = posts[i]; break; }
+  }
   if (!p) return;
-  const cycle = {draft:'scheduled',scheduled:'posted',posted:'draft'};
-  p.status = cycle[p.status] || 'draft';
+  var next = {draft:'scheduled', scheduled:'posted', posted:'draft'};
+  p.status = next[p.status] || 'draft';
   saveToDB();
   syncToSheet(p);
   renderPosts();
@@ -542,48 +591,10 @@ function clearAll() {
 
 function filterPosts(type, btn) {
   currentFilter = type;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  var btns = document.querySelectorAll('.filter-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
   if (btn) btn.classList.add('active');
   renderPosts();
-}
-
-function renderPosts() {
-  const grid = document.getElementById('posts-grid');
-  const filtered = currentFilter === 'all' ? posts : posts.filter(p => p.status === currentFilter);
-  document.getElementById('posts-count').textContent = posts.length + ' post' + (posts.length !== 1 ? 's' : '');
-
-  if (!filtered.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128241;</div><p>' +
-      (currentFilter === 'all' ? 'No posts yet - plan your first one above!' : 'No ' + currentFilter + ' posts yet.') + '</p></div>';
-    return;
-  }
-
-  const sm = {
-    draft:'<span class="status-pill status-draft">&#128221; Draft</span>',
-    scheduled:'<span class="status-pill status-scheduled">&#128197; Scheduled</span>',
-    posted:'<span class="status-pill status-posted">&#9989; Posted</span>'
-  };
-
-  grid.innerHTML = filtered.map(p => {
-    const ds = p.date ? new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : 'No date';
-    const img = p.image ? '<img src="'+p.image+'" style="width:100%;height:100%;object-fit:cover;">' : '<div class="post-card-image-placeholder">No image</div>';
-    return '<div class="post-card">' +
-      '<div class="post-card-image">'+img+'</div>' +
-      '<div class="post-card-body">' +
-        '<div class="post-card-date">'+ds+'</div>' +
-        (p.event ? '<div style="font-size:10.5px;font-weight:600;color:var(--navy);margin-bottom:3px;">'+esc(p.event)+'</div>' : '') +
-        '<div class="post-card-copy">'+esc(p.copy)+'</div>' +
-        (p.hashtags ? '<div class="post-card-tags">'+esc(p.hashtags)+'</div>' : '') +
-        (p.link ? '<div style="font-size:10.5px;color:#00376b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">&#128279; '+esc(p.link)+'</div>' : '') +
-        (p.notes ? '<div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;font-style:italic;">&#128172; '+esc(p.notes)+'</div>' : '') +
-        '<div class="post-card-footer">' + (sm[p.status]||sm.draft) +
-          '<div class="post-card-actions">' +
-            '<button class="btn-sm btn-status" onclick="cycleStatus(''+p.id+'')">Change status</button>' +
-            '<button class="btn-sm btn-edit" onclick="editPost(''+p.id+'')">Edit</button>' +
-            '<button class="btn-sm btn-delete" onclick="deletePost(''+p.id+'')">Delete</button>' +
-          '</div></div>' +
-      '</div></div>';
-  }).join('');
 }
 
 function esc(s) {
@@ -591,55 +602,141 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-async function suggestHashtags() {
-  const copy = document.getElementById('post-copy').value.trim();
-  const event = document.getElementById('post-event').value.trim();
-  if (!copy) { showToast('Write your caption first', true); return; }
+function renderPosts() {
+  var grid = document.getElementById('posts-grid');
+  var filtered = [];
+  for (var i = 0; i < posts.length; i++) {
+    if (currentFilter === 'all' || posts[i].status === currentFilter) filtered.push(posts[i]);
+  }
 
-  const btn = document.getElementById('suggest-btn');
+  var count = posts.length;
+  document.getElementById('posts-count').textContent = count + ' post' + (count !== 1 ? 's' : '');
+
+  if (filtered.length === 0) {
+    var msg = currentFilter === 'all' ? 'No posts yet - plan your first one above!' : 'No ' + currentFilter + ' posts yet.';
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128241;</div><p>' + msg + '</p></div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var p = filtered[i];
+    var ds = 'No date';
+    if (p.date) {
+      ds = new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+    }
+    var imgHtml = p.image
+      ? '<img src="' + p.image + '" style="width:100%;height:100%;object-fit:cover;">'
+      : '<div class="post-card-image-placeholder">No image</div>';
+
+    var spill = {
+      draft: '<span class="status-pill status-draft">Draft</span>',
+      scheduled: '<span class="status-pill status-scheduled">Scheduled</span>',
+      posted: '<span class="status-pill status-posted">Posted</span>'
+    };
+
+    html += '<div class="post-card">'
+      + '<div class="post-card-image">' + imgHtml + '</div>'
+      + '<div class="post-card-body">'
+      + '<div class="post-card-date">' + ds + '</div>'
+      + (p.event ? '<div style="font-size:10.5px;font-weight:600;color:var(--navy);margin-bottom:3px;">' + esc(p.event) + '</div>' : '')
+      + '<div class="post-card-copy">' + esc(p.copy) + '</div>'
+      + (p.hashtags ? '<div class="post-card-tags">' + esc(p.hashtags) + '</div>' : '')
+      + (p.link ? '<div style="font-size:10.5px;color:#00376b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(p.link) + '</div>' : '')
+      + (p.notes ? '<div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;font-style:italic;">' + esc(p.notes) + '</div>' : '')
+      + '<div class="post-card-footer">'
+      + (spill[p.status] || spill['draft'])
+      + '<div class="post-card-actions">'
+      + '<button class="btn-sm btn-status" onclick="cycleStatus('' + p.id + '')">Change status</button>'
+      + '<button class="btn-sm btn-edit" onclick="editPost('' + p.id + '')">Edit</button>'
+      + '<button class="btn-sm btn-delete" onclick="deletePost('' + p.id + '')">Delete</button>'
+      + '</div></div>'
+      + '</div></div>';
+  }
+  grid.innerHTML = html;
+}
+
+function suggestHashtags() {
+  var copy = document.getElementById('post-copy').value.trim();
+  var event = document.getElementById('post-event').value.trim();
+  if (!copy) {
+    showToast('Write your caption first', true);
+    return;
+  }
+  var btn = document.getElementById('suggest-btn');
   btn.textContent = 'Thinking...';
   btn.disabled = true;
 
-  const prompt = `You are a social media expert for Lincoln-Hubbard Elementary School PTO in Summit, NJ. Suggest 10-15 Instagram hashtags for this post. Mix of: school-specific (#LincolnHubbard #SummitNJ #LHPTO), community (#SummitNJMoms #NJMoms #ElementarySchool #PTOlife), event-specific, and broad reach tags. Event: ${event || 'LH PTO post'}. Caption: ${copy}. Return ONLY hashtags space-separated, nothing else.`;
+  var prompt = 'You are a social media expert for Lincoln-Hubbard Elementary School PTO in Summit, NJ. '
+    + 'Suggest 10-15 Instagram hashtags for this post. '
+    + 'Mix of: school-specific (#LincolnHubbard #SummitNJ #LHPTO), '
+    + 'community (#SummitNJMoms #NJMoms #ElementarySchool #PTOlife), '
+    + 'event-specific, and broad reach tags. '
+    + 'Event: ' + (event || 'LH PTO post') + '. '
+    + 'Caption: ' + copy + '. '
+    + 'Return ONLY hashtags space-separated on one line, nothing else.';
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await res.json();
-    const text = data.content?.[0]?.text?.trim() || '';
-    const tags = [...new Set(text.match(/#[A-Za-z0-9]+/g) || [])];
-    if (!tags.length) { showToast('Could not generate suggestions - try again', true); return; }
-
-    const existing = document.getElementById('post-hashtags').value.toLowerCase();
-    document.getElementById('hashtag-chips').innerHTML = tags.map(tag => {
-      const added = existing.includes(tag.toLowerCase());
-      return '<button type="button" class="hashtag-chip' + (added ? ' added' : '') + '" onclick="addHashtag(this,'' + tag + '')" ' + (added ? 'disabled' : '') + '>' + (added ? '&#10003; ' : '+ ') + tag + '</button>';
-    }).join('');
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    var text = '';
+    if (data.content && data.content[0] && data.content[0].text) {
+      text = data.content[0].text.trim();
+    }
+    var matches = text.match(/#[A-Za-z0-9]+/g) || [];
+    var seen = {};
+    var tags = [];
+    for (var i = 0; i < matches.length; i++) {
+      var t = matches[i];
+      if (!seen[t.toLowerCase()]) { seen[t.toLowerCase()] = true; tags.push(t); }
+    }
+    if (tags.length === 0) {
+      showToast('Could not generate suggestions - try again', true);
+      return;
+    }
+    var existing = document.getElementById('post-hashtags').value.toLowerCase();
+    var chips = '';
+    for (var j = 0; j < tags.length; j++) {
+      var tag = tags[j];
+      var added = existing.indexOf(tag.toLowerCase()) !== -1;
+      chips += '<button type="button" class="hashtag-chip' + (added ? ' added' : '') + '" '
+        + 'onclick="addHashtag(this,'' + tag + '')" '
+        + (added ? 'disabled' : '') + '>'
+        + (added ? 'Added ' : '+ ') + tag + '</button>';
+    }
+    document.getElementById('hashtag-chips').innerHTML = chips;
     document.getElementById('hashtag-suggestions').style.display = 'block';
     showToast('Hashtag suggestions ready!');
-  } catch(e) {
+  })
+  .catch(function() {
     showToast('Suggestion failed - check connection', true);
-  } finally {
-    btn.textContent = '✨ Suggest hashtags';
+  })
+  .finally(function() {
+    btn.textContent = 'Suggest hashtags';
     btn.disabled = false;
-  }
+  });
 }
 
 function addHashtag(btn, tag) {
-  const field = document.getElementById('post-hashtags');
-  const cur = field.value.trim();
-  if (cur.toLowerCase().includes(tag.toLowerCase())) return;
+  var field = document.getElementById('post-hashtags');
+  var cur = field.value.trim();
+  if (cur.toLowerCase().indexOf(tag.toLowerCase()) !== -1) return;
   field.value = cur ? cur + ' ' + tag : tag;
   btn.classList.add('added');
-  btn.textContent = '✓ ' + tag;
+  btn.textContent = 'Added ' + tag;
   btn.disabled = true;
   updatePreview();
 }
 
-// INIT
+// Init
 loadPosts();
 renderPosts();
 updatePreview();
